@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stamp Rally - Management</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 30px; }
+    .button { padding: 10px 20px; margin: 10px; font-size: 1em; }
+  </style>
+</head>
+<body>
+  <h1>Manager Confirmation</h1>
+  <p>Confirm that the visitor has completed the full stamp rally.</p>
+  <button class="button" id="confirmAll">Confirm All Stamps</button>
+  
+  <script>
+    // On confirmation, we update the IndexedDB record to reflect manager confirmation.
+    // (For demonstration, we simply set a flag in localStorage.)
+    
+    document.getElementById('confirmAll').addEventListener('click', () => {
+      // In a complete implementation, you might update a field in each stamp record or add a global flag.
+      // Here, we simply store a flag that the manager confirmed the full stamp.
+      localStorage.setItem('managerConfirmed', 'true');
+      alert('All stamps have been confirmed by the manager.');
+      // Redirect back to stamp page so it can display the update.
+      window.location.href = 'stamp.html';
+    });
+  </script>
+</body>
+</html>

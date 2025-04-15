@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stamp Rally App</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    
+    h1 {
+      text-align: center;
+      color: #4a4a4a;
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .video-container {
+      position: relative;
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    
+    #video {
+      width: 100%;
+      border: 3px solid #333;
+      border-radius: 8px;
+    }
+    
+    .scanner-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    
+    .scanner-box {
+      border: 2px solid #0f0;
+      width: 200px;
+      height: 200px;
+      opacity: 0.7;
+    }
+    
+    #scan-status {
+      text-align: center;
+      font-weight: bold;
+      margin: 10px 0;
+      height: 24px;
+    }
+    
+    .scan-button {
+      display: block;
+      margin: 0 auto;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    
+    .scan-button:hover {
+      background-color: #45a049;
+    }
+    
+    .scan-button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    
+    .map-container {
+      position: relative;
+      width: 100%;
+      max-width: 500px;
+      margin: 20px auto;
+      border: 2px solid #333;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .map-bg {
+      width: 100%;
+      display: block;
+    }
+    
+    .stamp {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      transform: translate(-50%, -50%);
+      transition: all 0.3s ease;
+    }
+    
+    .stamp.collected {
+      opacity: 1;
+    }
+    
+    .stamp:not(.collected) {
+      opacity: 0.3;
+    }
+    
+    .progress {
+      text-align: center;
+      font-size: 18px;
+      margin: 10px 0;
+    }
+    
+    .reset-button {
+      display: block;
+      margin: 20px auto;
+      padding: 8px 16px;
+      background-color: #f44336;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .reset-button:hover {
+      background-color: #d32f2f;
+    }
+  </style>
+</head>
+<body>
+  <h1>Stamp Rally</h1>
+  
+  <div class="container">
+    <div class="progress">
+      Stamps collected: <span id="collected-count">0</span>/<span id="total-count">0</span>
+    </div>
+    
+    <div class="map-container" id="map-container">
+      <img src="/api/placeholder/500/350" alt="Map" class="map-bg" id="map-bg">
+      <!-- Stamps will be added here dynamically -->
+    </div>
+    
+    <div class="video-container">
+      <video id="video" autoplay playsinline></video>
+      <div class="scanner-overlay">
+        <div class="scanner-box"></div>
+      </div>
+    </div>
+    
+    <div id="scan-status"></div>
+    
+    <button id="scan-button" class="scan-button">Start Camera</button>
+    <button id="reset-button" class="reset-button">Reset Progress</button>
+  </div>
+
+  <script>
+    // Configuration for stamp locations
+    const stampLocations = [
+      {
+        id: "location1",
+        name: "Tokyo Tower",
+        qrValue: "stamp-location-1",
+        mapX: 25, // percentage from left
+        mapY: 30, // percentage from top
+        stampImage: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHBhdGggZmlsbD0iI2U3NDAzOCIgZD0iTTMyIDJDMTUuNDMyIDIgMiAxNS40MzIgMiAzMnMxMy40MzIgMzAgMzAgMzAgMzAtMTMuNDMyIDMwLTMwUzQ4LjU2OCAyIDMyIDJ6bTAgNTRDMTYuNTM5IDU2IDQgNDMuNDYxIDQgMjhTMTYuNTM5IDAgMzIgMHMyOCAxMi41MzkgMjggMjgtMTIuNTM5IDI4LTI4IDI4eiIvPjxwYXRoIGZpbGw9IiNlNzQwMzgiIGQ9Ik00My4yNzEgMjAuNzI4Yy0uMzAzLTEuODk3LTEuMS0zLjUyMi0yLjI5Mi00LjcxNi0yLjM4My0yLjM4Mi01LjUzMi0yLjM1Mi03LjE1NC0xLjk4NC0uNzQ2LjE3LTEuNDE1LjQyNC0yLjAxNS43MTQtMS43ODYuODYzLTIuODE4IDEuODkzLTMuMTIgMi4yMTItLjMwMy0uMzE5LTEuMzM0LTEuMzQ5LTMuMTItMi4yMTItLjYtLjI5LTEuMjY5LS41NDUtMi4wMTUtLjcxNC0xLjYyMi0uMzY4LTQuNzcxLS4zOTktNy4xNTQgMS45ODQtMS4xOTEgMS4xOTMtMS45ODggMi44MTktMi4yOTEgNC43MTYtLjE3OSAxLjEyMS0uMjQ5IDIuNDI1LS4xMSAzLjg4Mi4yMjEgMi4zMTcuODcgNC45MTcgMS45MjkgNy43MzkgMS40NjMgMy45MDMgMi4yMDMgNi43NTMgMi41MTggOC42NjlIMTYuNGExIDEgMCAwIDAgMCAyaDMxLjJhMSAxIDAgMCAwIDAtMmgtMi4wNDZjLjMxNS0xLjkxNiAxLjA1NS00Ljc2NiAyLjUxOC04LjY2OSAxLjA1OS0yLjgyMiAxLjcwOC01LjQyMiAxLjkyOS03LjczOS4xMzktMS40NTcuMDY4LTIuNzYxLS4xMTEtMy44ODJ6TTE2IDI0LjZhOC45IDguOSAwIDAgMSAuODU0LTMuODQ1Yy43MTUtMS42OTggMS42NzMtMi42NTcgMS42NzMtMi42NTdzMS42MDcgMS43OTIgMi4xMjUgNC45ODVjLjI5OCAxLjg0LjI2NiA0LjI1Ny0uMTA0IDcuMDgzLS4zNSAyLjY3My0uOTggNS43MzMtMS44OTEgOS4wMzRoLTMuMzZjLS4yODUtMS45MTctLjk1My00LjQ4LTItNy43QzEyLjQ0NiAyOC42IDEyIDI1LjggMTIgMjRjMC0uMjU4LjAyMS0uNjguMDQxLS44NjIuMDgtLjc0NS4yNzItMS43MTQuNjgtMi4zNzUuMzA4LS40OTguNjk1LS43ODUgMS4yNzktLjg2M3YuMWE0LjI1NSA0LjI1NSAwIDAgMCAyIDMuNnptMzUuOTU5LS41MzhjLS4wOC43NDUtLjI3MiAxLjcxNC0uNjggMi4zNzUtLjMwOC40OTgtLjY5NS43ODUtMS4yNzkuODYzdi0uMWE0LjI1NSA0LjI1NSAwIDAgMS0yLTMuNlYyMS42YTguOSA4LjkgMCAwIDAtLjg1NCAzLjg0NWMtLjcxNSAxLjY5OC0xLjY3MyAyLjY1Ny0xLjY3MyAyLjY1N3MtMS42MDctMS43OTItMi4xMjUtNC45ODVjLS4yOTgtMS44NC0uMjY2LTQuMjU3LjEwNC03LjA4My4zNS0yLjY3My45OC01LjczMyAxLjg5MS05LjAzNGgzLjM2Yy4yODUgMS45MTcuOTUzIDQuNDggMiA3LjcuODUxIDIuOTAxIDEuMjk3IDUuNzAxIDEuMjk3IDcuNSAwIC4yNTgtLjAyMS42OC0uMDQxLjg2MnoiLz48L3N2Zz4="
+      },
+      {
+        id: "location2",
+        name: "Osaka Castle",
+        qrValue: "stamp-location-2",
+        mapX: 75,
+        mapY: 25,
+        stampImage: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHBhdGggZmlsbD0iIzQyOWFlNSIgZD0iTTMyIDJDMTUuNDMyIDIgMiAxNS40MzIgMiAzMnMxMy40MzIgMzAgMzAgMzAgMzAtMTMuNDMyIDMwLTMwUzQ4LjU2OCAyIDMyIDJ6bTAgNTRDMTYuNTM5IDU2IDQgNDMuNDYxIDQgMjhTMTYuNTM5IDAgMzIgMHMyOCAxMi41MzkgMjggMjgtMTIuNTM5IDI4LTI4IDI4eiIvPjxwYXRoIGZpbGw9IiM0MjlhZTUiIGQ9Ik00MS41IDQ2aC0xOWExIDEgMCAwIDEtMS0xVjE5YTEgMSAwIDAgMSAxLTFoMTlhMSAxIDAgMCAxIDEgMXYyNmExIDEgMCAwIDEtMSAxem0tMTgtMmgxN1YyMEgyMy41djI0eiIvPjxwYXRoIGZpbGw9IiM0MjlhZTUiIGQ9Ik00NCA0Nkg0NFYxOWExIDEgMCAwIDAtMS0xSDIxYTEgMSAwIDAgMC0xIDF2MjdoLTFhMSAxIDAgMCAwIDAgMmgyNWExIDEgMCAwIDAgMC0yem0tMjItMmgyMFYyMEgyMnYyNHoiLz48cGF0aCBmaWxsPSIjNDI5YWU1IiBkPSJNMjYgMjRoMTJhMSAxIDAgMCAwIDAtMkgyNmExIDEgMCAwIDAgMCAyeiIvPjxwYXRoIGZpbGw9IiM0MjlhZTUiIGQ9Ik0yNiAyOGgxMmExIDEgMCAwIDAgMC0ySDI2YTEgMSAwIDAgMCAwIDJ6Ii8+PHBhdGggZmlsbD0iIzQyOWFlNSIgZD0iTTI2IDMyaDEyYTEgMSAwIDAgMCAwLTJIMjZhMSAxIDAgMCAwIDAgMnoiLz48cGF0aCBmaWxsPSIjNDI5YWU1IiBkPSJNMjYgMzZoMTJhMSAxIDAgMCAwIDAtMkgyNmExIDEgMCAwIDAgMCAyeiIvPjxwYXRoIGZpbGw9IiM0MjlhZTUiIGQ9Ik0yNiA0MGgxMmExIDEgMCAwIDAgMC0ySDI2YTEgMSAwIDAgMCAwIDJ6Ii8+PC9zdmc+"
+      },
+      {
+        id: "location3",
+        name: "Mt. Fuji",
+        qrValue: "stamp-location-3",
+        mapX: 50,
+        mapY: 70,
+        stampImage: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHBhdGggZmlsbD0iIzUwYzg3OCIgZD0iTTMyIDJDMTUuNDMyIDIgMiAxNS40MzIgMiAzMnMxMy40MzIgMzAgMzAgMzAgMzAtMTMuNDMyIDMwLTMwUzQ4LjU2OCAyIDMyIDJ6bTAgNTRDMTYuNTM5IDU2IDQgNDMuNDYxIDQgMjhTMTYuNTM5IDAgMzIgMHMyOCAxMi41MzkgMjggMjgtMTIuNTM5IDI4LTI4IDI4eiIvPjxwYXRoIGZpbGw9IiM1MGM4NzgiIGQ9Ik00OCAxNnMtNC0yLTgtMi04IDItMTYgMi0xMi0yLTE2LTJjLTMuOTkzIDAtOCAyLTggMnMyLjQ0MiAyMCA4IDE4YzQuMDA3LTEuNDQxIDcuMTQzLTIgMTItMiA2LjI1NyAwIDguOTk2Ljc0OCAxNiAyIDcuNDQ0IDEuMzMzIDEyLTE4IDEyLTE4eiIvPjwvc3ZnPg=="
+      },
+      {
+        id: "location4",
+        name: "Kyoto Temple",
+        qrValue: "stamp-location-4",
+        mapX: 15,
+        mapY: 65,
+        stampImage: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHBhdGggZmlsbD0iI2FhODdmZiIgZD0iTTMyIDJDMTUuNDMyIDIgMiAxNS40MzIgMiAzMnMxMy40MzIgMzAgMzAgMzAgMzAtMTMuNDMyIDMwLTMwUzQ4LjU2OCAyIDMyIDJ6bTAgNTRDMTYuNTM5IDU2IDQgNDMuNDYxIDQgMjhTMTYuNTM5IDAgMzIgMHMyOCAxMi41MzkgMjggMjgtMTIuNTM5IDI4LTI4IDI4eiIvPjxwYXRoIGZpbGw9IiNhYTg3ZmYiIGQ9Ik00MSAyMlY0YTEgMSAwIDAgMC0xLTFIMjRhMSAxIDAgMCAwLTEgMXYxOEg3YTEgMSAwIDAgMC0xIDF2MGExIDEgMCAwIDAgMSAxaDUwYTEgMSAwIDAgMCAxLTF2MGExIDEgMCAwIDAtMS0xSDQxek0yNSA1aDVWMWg0djRoNXYxN0gyNVY1eiIvPjwvc3ZnPg=="
+      },
+      {
+        id: "location5",
+        name: "Hiroshima Peace Park",
+        qrValue: "stamp-location-5",
+        mapX: 85,
+        mapY: 75,
+        stampImage: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHBhdGggZmlsbD0iI2YyYWQzMyIgZD0iTTMyIDJDMTUuNDMyIDIgMiAxNS40MzIgMiAzMnMxMy40MzIgMzAgMzAgMzAgMzAtMTMuNDMyIDMwLTMwUzQ4LjU2OCAyIDMyIDJ6bTAgNTRDMTYuNTM5IDU2IDQgNDMuNDYxIDQgMjhTMTYuNTM5IDAgMzIgMHMyOCAxMi41MzkgMjggMjgtMTIuNTM5IDI4LTI4IDI4eiIvPjxwYXRoIGZpbGw9IiNmMmFkMzMiIGQ9Ik0yMi44MzQgMTZINDEuMTdjMi4wNzggMCAzLjc2NiAxLjY4OCAzLjc2NiAzLjc2NnYyNC40NjhjMCAyLjA3OC0xLjY4OCAzLjc2Ni0zLjc2NiAzLjc2NkgyMi44MzRjLTIuMDc4IDAtMy43NjYtMS42ODgtMy43NjYtMy43NjZWMTkuNzY2YzAtMi4wNzggMS42ODgtMy43NjYgMy43NjYtMy43NjZ6TTE5IDQ0LjM4MmgyNmEyIDIgMCAwIDAgMC00SDE5YTIgMiAwIDAgMCAwIDR6TTE3LjQ2OCAzNGgzYTEgMSAwIDAgMCAwLTJoLTJhMSAxIDAgMCAxLTEtMXYtOGExIDEgMCAwIDEgMS0xaDJhMSAxIDAgMCAwIDAtMmgtM2ExIDEgMCAwIDAtMSAxdjEyYTEgMSAwIDAgMCAxIDFoMHptMzItMTNoLTNhMSAxIDAgMCAwIDAgMmgyYTEgMSAwIDAgMSAxIDF2OGExIDEgMCAwIDEtMSAxaC0yYTEgMSAwIDAgMCAwIDJoM2ExIDEgMCAwIDAgMS0xVjIyYTEgMSAwIDAgMC0xLTFoMHptLTYgMjFoLTIzYTEgMSAwIDAgMCAwIDJoMjNhMSAxIDAgMCAwIDAtMnoiLz48L3N2Zz4="
+      }
+    ];
+
+    // DOM elements
+    const video = document.getElementById('video');
+    const scanButton = document.getElementById('scan-button');
+    const scanStatus = document.getElementById('scan-status');
+    const resetButton = document.getElementById('reset-button');
+    const mapContainer = document.getElementById('map-container');
+    const collectedCountEl = document.getElementById('collected-count');
+    const totalCountEl = document.getElementById('total-count');
+    
+    // App state
+    let scanning = false;
+    let stream = null;
+    let collectingInterval = null;
+    const STORAGE_KEY = 'stamp-rally-progress';
+    
+    // Initialize the app
+    function initApp() {
+      // Set total count
+      totalCountEl.textContent = stampLocations.length;
+      
+      // Load saved progress
+      loadProgress();
+      
+      // Create stamps on the map
+      createStampsOnMap();
+      
+      // Add event listeners
+      scanButton.addEventListener('click', toggleScanner);
+      resetButton.addEventListener('click', resetProgress);
+    }
+    
+    // Load progress from local storage
+    function loadProgress() {
+      const savedProgress = localStorage.getItem(STORAGE_KEY);
+      if (savedProgress) {
+        const collectedStamps = JSON.parse(savedProgress);
+        
+        // Update the stamps on the map
+        stampLocations.forEach(location => {
+          if (collectedStamps.includes(location.id)) {
+            location.collected = true;
+          }
+        });
+        
+        // Update the counter
+        updateCounter();
+      }
+    }
+    
+    // Save progress to local storage
+    function saveProgress() {
+      const collectedStamps = stampLocations
+        .filter(location => location.collected)
+        .map(location => location.id);
+      
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(collectedStamps));
+    }
+    
+    // Update the counter display
+    function updateCounter() {
+      const collectedCount = stampLocations.filter(location => location.collected).length;
+      collectedCountEl.textContent = collectedCount;
+      
+      // Check if all stamps are collected
+      if (collectedCount === stampLocations.length) {
+        scanStatus.textContent = '🎉 Congratulations! All stamps collected!';
+        scanStatus.style.color = '#4CAF50';
+      }
+    }
+    
+    // Create stamps on the map
+    function createStampsOnMap() {
+      stampLocations.forEach(location => {
+        const stamp = document.createElement('img');
+        stamp.src = location.stampImage;
+        stamp.alt = location.name;
+        stamp.className = 'stamp';
+        if (location.collected) {
+          stamp.classList.add('collected');
+        }
+        stamp.style.left = `${location.mapX}%`;
+        stamp.style.top = `${location.mapY}%`;
+        stamp.dataset.locationId = location.id;
+        
+        mapContainer.appendChild(stamp);
+      });
+    }
+    
+    // Reset all progress
+    function resetProgress() {
+      if (confirm('Are you sure you want to reset your stamp rally progress?')) {
+        // Clear local storage
+        localStorage.removeItem(STORAGE_KEY);
+        
+        // Reset location collected status
+        stampLocations.forEach(location => {
+          location.collected = false;
+        });
+        
+        // Update stamps on the map
+        const stampElements = document.querySelectorAll('.stamp');
+        stampElements.forEach(stamp => {
+          stamp.classList.remove('collected');
+        });
+        
+        // Update counter
+        updateCounter();
+        
+        // Update status
+        scanStatus.textContent = 'Progress has been reset!';
+        scanStatus.style.color = '#f44336';
+        
+        // Clear status after 3 seconds
+        setTimeout(() => {
+          scanStatus.textContent = '';
+        }, 3000);
+      }
+    }
+    
+    // Toggle the QR code scanner
+    function toggleScanner() {
+      if (scanning) {
+        stopScanner();
+      } else {
+        startScanner();
+      }
+    }
+    
+    // Start the QR code scanner
+    async function startScanner() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
+        });
+        
+        video.srcObject = stream;
+        scanning = true;
+        scanButton.textContent = 'Stop Camera';
+        
+        // Start processing frames
+        collectingInterval = setInterval(scanQRCode, 200);
+        
+        scanStatus.textContent = 'Scanning for QR codes...';
+        scanStatus.style.color = '#4CAF50';
+      } catch (error) {
+        console.error('Error starting the camera:', error);
+        scanStatus.textContent = 'Could not access the camera';
+        scanStatus.style.color = '#f44336';
+      }
+    }
+    
+    // Stop the QR code scanner
+    function stopScanner() {
+      if (stream) {
+        const tracks = stream.getTracks();
+        tracks.forEach(track => track.stop());
+        video.srcObject = null;
+      }
+      
+      if (collectingInterval) {
+        clearInterval(collectingInterval);
+        collectingInterval = null;
+      }
+      
+      scanning = false;
+      scanButton.textContent = 'Start Camera';
+      scanStatus.textContent = '';
+    }
+    
+    // Scan for QR codes in the video stream
+    function scanQRCode() {
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+      
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      
+      if (code) {
+        const qrValue = code.data;
+        
+        // Check if the QR code corresponds to a stamp location
+        const location = stampLocations.find(loc => loc.qrValue === qrValue);
+        
+        if (location) {
+          if (!location.collected) {
+            // Mark as collected
+            location.collected = true;
+            
+            // Update the stamp on the map
+            const stampElement = document.querySelector(`.stamp[data-location-id="${location.id}"]`);
+            if (stampElement) {
+              stampElement.classList.add('collected');
+            }
+            
+            // Update counter and save progress
+            updateCounter();
+            saveProgress();
+            
+            // Show success message
+            scanStatus.textContent = `✅ Stamp collected: ${location.name}!`;
+            scanStatus.style.color = '#4CAF50';
+            
+            // Add some celebration effect
+            // This could be enhanced with animation or sound
+            const stamp = document.querySelector(`.stamp[data-location-id="${location.id}"]`);
+            if (stamp) {
+              stamp.style.transform = 'translate(-50%, -50%) scale(1.5)';
+              setTimeout(() => {
+                stamp.style.transform = 'translate(-50%, -50%) scale(1)';
+              }, 500);
+            }
+            
+            // Stop scanner after collecting a stamp
+            stopScanner();
+          } else {
+            scanStatus.textContent = `You already collected this stamp: ${location.name}`;
+            scanStatus.style.color = '#ff9800';
+          }
+        } else {
+          scanStatus.textContent = 'Invalid QR code for this stamp rally';
+          scanStatus.style.color = '#f44336';
+        }
+      }
+    }
+    
+    // Initialize the app when the page loads
+    window.addEventListener('load', initApp);
+  </script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stamp Rally - My Stamps</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    .container { padding: 20px; }
+    .stamp-board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-gap: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .stamp {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 2px solid #888;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2em;
+      color: #888;
+    }
+    .stamp.filled {
+      background-color: #4caf50;
+      color: white;
+      border-color: #4caf50;
+    }
+    /* Invisible corners for manager mode activation */
+    .corner {
+      position: fixed;
+      width: 50px;
+      height: 50px;
+      z-index: 999;
+    }
+    #top-left { top: 0; left: 0; }
+    #top-right { top: 0; right: 0; }
+    #bottom-left { bottom: 0; left: 0; }
+    #bottom-right { bottom: 0; right: 0; }
+    .button {
+      padding: 10px 20px;
+      margin-top: 20px;
+      font-size: 1em;
+    }
+    .explanation-links a {
+      margin: 5px;
+      text-decoration: none;
+      color: #0066cc;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Your Stamp Collection</h1>
+    <div id="stampBoard" class="stamp-board">
+      <!-- 12 stamp placeholders -->
+      <!-- We will give each stamp a data-id from 1 to 12 -->
+      <!-- Initially, they are empty (white circles) -->
+      <script>
+        // Render 12 stamp circles
+        for (let i = 1; i <= 12; i++) {
+          document.write(`<div class="stamp" id="stamp-${i}" data-stamp="${i}">${i}</div>`);
+        }
+      </script>
+    </div>
+    <button class="button" onclick="window.location.href='detection.html?method=qr'">
+      Detect via QR Code
+    </button>
+    <button class="button" onclick="window.location.href='detection.html?method=gps'">
+      Detect via GPS
+    </button>
+    <div class="explanation-links">
+      <h3>Location Explanations</h3>
+      <!-- 12 explanation links (currently dummy links) -->
+      <script>
+        for (let i = 1; i <= 12; i++) {
+          document.write(`<a href="explanation${i}.html" target="_blank">Location ${i}</a> `);
+        }
+      </script>
+    </div>
+    <div id="completionMessage" style="margin-top:30px; font-size:1.5em; color: #4caf50; display:none;">
+      Congratulations! You have collected all stamps!
+    </div>
+  </div>
+
+  <!-- Invisible divs for detecting a four-corner sequence for manager access -->
+  <div id="top-left" class="corner"></div>
+  <div id="top-right" class="corner"></div>
+  <div id="bottom-left" class="corner"></div>
+  <div id="bottom-right" class="corner"></div>
+
+  <script>
+    // ===============================
+    // IndexedDB setup for storing stamp status
+    // ===============================
+    const DB_NAME = 'StampDB';
+    const DB_VERSION = 1;
+    let db;
+    
+    function initDB() {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onerror = function(event) {
+        console.error('IndexedDB error:', event);
+      };
+      request.onsuccess = function(event) {
+        db = event.target.result;
+        // After DB is available, check if a new stamp was set via detection page
+        loadStamps();
+      };
+      request.onupgradeneeded = function(event) {
+        db = event.target.result;
+        if (!db.objectStoreNames.contains('stamps')) {
+          const store = db.createObjectStore('stamps', { keyPath: 'id' });
+          // Initialize 12 stamps with status false
+          for (let i = 1; i <= 12; i++) {
+            store.add({ id: i, filled: false });
+          }
+        }
+      };
+    }
+    
+    function loadStamps() {
+      const transaction = db.transaction(['stamps'], 'readonly');
+      const store = transaction.objectStore('stamps');
+      const request = store.getAll();
+      request.onsuccess = function(event) {
+        const stamps = event.target.result;
+        stamps.forEach(stamp => {
+          if (stamp.filled) {
+            document.getElementById('stamp-' + stamp.id).classList.add('filled');
+          }
+        });
+        checkCompletion();
+      };
+    }
+    
+    function updateStamp(stampId) {
+      const transaction = db.transaction(['stamps'], 'readwrite');
+      const store = transaction.objectStore('stamps');
+      const request = store.get(stampId);
+      request.onsuccess = function(event) {
+        const stampData = event.target.result;
+        if (!stampData.filled) {  // only update if not already filled
+          stampData.filled = true;
+          store.put(stampData);
+          // Show a splash (simulate with a temporary overlay)
+          showSplash(stampId);
+        }
+      };
+    }
+    
+    // ===============================
+    // Splash Screen simulation for a stamp (using an image/video placeholder)
+    // ===============================
+    function showSplash(stampId) {
+      const splashOverlay = document.createElement('div');
+      splashOverlay.style.position = 'fixed';
+      splashOverlay.style.top = 0;
+      splashOverlay.style.left = 0;
+      splashOverlay.style.width = '100%';
+      splashOverlay.style.height = '100%';
+      splashOverlay.style.backgroundColor = 'rgba(0,0,0,0.8)';
+      splashOverlay.style.display = 'flex';
+      splashOverlay.style.alignItems = 'center';
+      splashOverlay.style.justifyContent = 'center';
+      splashOverlay.style.zIndex = 1000;
+      splashOverlay.style.color = 'white';
+      splashOverlay.style.fontSize = '2em';
+      splashOverlay.innerText = `Stamp ${stampId} collected!`;
+      document.body.appendChild(splashOverlay);
+      
+      // After 2 seconds remove the splash and update the UI
+      setTimeout(() => {
+        document.body.removeChild(splashOverlay);
+        document.getElementById('stamp-' + stampId).classList.add('filled');
+        checkCompletion();
+      }, 2000);
+    }
+    
+    // ===============================
+    // Check if all stamps are filled and show completion message
+    // ===============================
+    function checkCompletion() {
+      const transaction = db.transaction(['stamps'], 'readonly');
+      const store = transaction.objectStore('stamps');
+      const request = store.getAll();
+      request.onsuccess = function(event) {
+        const stamps = event.target.result;
+        const allFilled = stamps.every(s => s.filled);
+        if (allFilled) {
+          document.getElementById('completionMessage').style.display = 'block';
+        }
+      };
+    }
+    
+    // ===============================
+    // Listen for URL parameter from detection page
+    // ===============================
+    function getURLParameter(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name);
+    }
+    
+    window.addEventListener('load', () => {
+      initDB();
+      // Check if a stamp value was passed from the detection page
+      const stampValue = getURLParameter('stamp');
+      if (stampValue) {
+        updateStamp(parseInt(stampValue));
+        // Remove the parameter from URL (optional cleanup)
+        window.history.replaceState({}, document.title, "stamp.html");
+      }
+    });
+    
+    // ===============================
+    // Manager mode – detect four-corner sequence
+    // (For demonstration, we wait for clicks in the four corners in a predefined order: top-left, top-right, bottom-right, bottom-left)
+    // ===============================
+    const cornerOrder = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
+    let clickSequence = [];
+    
+    cornerOrder.forEach(cornerId => {
+      document.getElementById(cornerId).addEventListener('click', () => {
+        clickSequence.push(cornerId);
+        if (clickSequence.length === 4) {
+          if (clickSequence.join('-') === cornerOrder.join('-')) {
+            // Redirect to manager page if sequence is correct.
+            window.location.href = 'manager.html';
+          }
+          clickSequence = []; // reset regardless
+        }
+      });
+    });
+  </script>
+</body>
+</html>

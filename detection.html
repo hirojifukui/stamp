@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stamp Rally - Detection</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; }
+    .button { padding: 10px 20px; margin: 10px; font-size: 1em; }
+    #cameraView, #gpsStatus { margin-top: 20px; }
+    input { padding: 10px; font-size: 1em; }
+    .error { color: red; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Location Detection</h1>
+  <div id="detectionContent"></div>
+  <!-- Cancel button to return to stamp page -->
+  <button class="button" onclick="window.location.href='stamp.html'">Cancel</button>
+  
+  <script>
+    // Predefined GPS locations for 12 stamps (dummy values)
+    const locations = [
+      {id: 1, lat: 35.0001, lng: 139.0001, allowance: 0.001},
+      {id: 2, lat: 35.0002, lng: 139.0002, allowance: 0.001},
+      {id: 3, lat: 35.0003, lng: 139.0003, allowance: 0.001},
+      {id: 4, lat: 35.0004, lng: 139.0004, allowance: 0.001},
+      {id: 5, lat: 35.0005, lng: 139.0005, allowance: 0.001},
+      {id: 6, lat: 35.0006, lng: 139.0006, allowance: 0.001},
+      {id: 7, lat: 35.0007, lng: 139.0007, allowance: 0.001},
+      {id: 8, lat: 35.0008, lng: 139.0008, allowance: 0.001},
+      {id: 9, lat: 35.0009, lng: 139.0009, allowance: 0.001},
+      {id: 10, lat: 35.0010, lng: 139.0010, allowance: 0.001},
+      {id: 11, lat: 35.0011, lng: 139.0011, allowance: 0.001},
+      {id: 12, lat: 35.0012, lng: 139.0012, allowance: 0.001}
+    ];
+    
+    // Determine detection method from URL parameter
+    function getURLParameter(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name);
+    }
+    
+    const method = getURLParameter('method');
+    const contentDiv = document.getElementById('detectionContent');
+    
+    if (method === 'qr') {
+      // --- Simulated QR Code Detection ---
+      contentDiv.innerHTML = '<p>Camera is active (simulated).<br/>Please enter a QR code value (01 to 12):</p>' +
+                             '<input type="text" id="qrInput" maxlength="2" />' +
+                             '<br/><button class="button" onclick="submitQR()">Submit</button>';
+    } else if (method === 'gps') {
+      // --- GPS Location Detection ---
+      contentDiv.innerHTML = '<p>Detecting your location...</p>' +
+                             '<div id="gpsStatus"></div>';
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(geoSuccess, geoError);
+      } else {
+        document.getElementById('gpsStatus').innerText = 'Geolocation is not supported by your browser.';
+      }
+    } else {
+      contentDiv.innerHTML = '<p>Error: Unknown detection method.</p>';
+    }
+    
+    function submitQR() {
+      const value = document.getElementById('qrInput').value.trim();
+      // Basic check: value should be an integer between 1 and 12 (allows leading zero).
+      const num = parseInt(value, 10);
+      if (!isNaN(num) && num >= 1 && num <= 12) {
+        // Redirect back to stamp page with the stamp value
+        window.location.href = 'stamp.html?stamp=' + num;
+      } else {
+        alert('Please enter a valid QR code value between 01 and 12.');
+      }
+    }
+    
+    function geoSuccess(position) {
+      const userLat = position.coords.latitude;
+      const userLng = position.coords.longitude;
+      let found = false;
+      let foundId = null;
+      // Loop through each predefined location to see if within allowed range
+      for (const loc of locations) {
+        if (Math.abs(userLat - loc.lat) <= loc.allowance &&
+            Math.abs(userLng - loc.lng) <= loc.allowance) {
+          found = true;
+          foundId = loc.id;
+          break;
+        }
+      }
+      if (found) {
+        document.getElementById('gpsStatus').innerText = 'Detected location for stamp ' + foundId + '!';
+        // Delay a moment to show success then return to stamp page
+        setTimeout(() => {
+          window.location.href = 'stamp.html?stamp=' + foundId;
+        }, 1500);
+      } else {
+        document.getElementById('gpsStatus').innerHTML = '<span class="error">Your location is not within any designated area.</span>';
+      }
+    }
+    
+    function geoError(error) {
+      document.getElementById('gpsStatus').innerHTML = '<span class="error">Error in geolocation: ' + error.message + '</span>';
+    }
+  </script>
+</body>
+</html>
