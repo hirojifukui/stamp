@@ -100,7 +100,7 @@
           window.location.href = 'stamp.html?stamp=' + foundId;
         }, 1500);
       } else {
-        document.getElementById('gpsStatus').innerHTML = '<span class="error">Your location is not within any designated area.</span>';
+        document.getElementById('gpsStatus').innerHTML = '<span class="error">Your location is not within any designated area.<br>Detected Coordinates:<br>Latitude: ' + userLat + '<br>Longitude: ' + userLng + '<br><br></span>';
       }
     }
     
