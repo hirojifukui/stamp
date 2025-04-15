@@ -76,6 +76,12 @@
     function geoSuccess(position) {
       const userLat = position.coords.latitude;
       const userLng = position.coords.longitude;
+
+    // Print the latitude and longitude for debugging purposes.
+      document.getElementById('gpsStatus').innerHTML = 
+          'Detected Coordinates:<br>Latitude: ' + userLat + '<br>Longitude: ' + userLng + '<br><br>';
+      
+
       let found = false;
       let foundId = null;
       // Loop through each predefined location to see if within allowed range
