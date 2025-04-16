@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <title>Stamp Rally - My Stamps</title>
   <style>
-    /* Default body styles and background image */
+    /* Default styles and background image */
     body { 
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
-      background-image: url('img/default_background.png'); /* set your default background image */
+      background-image: url('img/default_background.png'); /* default background */
       background-size: cover;
       background-position: center;
     }
@@ -54,14 +54,14 @@
       color: #4caf50;
       display: none;
     }
-    /* Invisible corners for manager activation */
+    /* Invisible corner divs – now 20px x 20px */
     .corner {
       position: fixed;
-      width: 50px;
-      height: 50px;
+      width: 20px;
+      height: 20px;
       z-index: 999;
-      /* Optionally, add background to debug clicks (remove later) */
-      /* background: rgba(255, 0, 0, 0.2); */
+      /* Uncomment the following to help debug corner positions */
+      /* background: rgba(255, 0, 0, 0.3); */
     }
     #top-left { top: 0; left: 0; }
     #top-right { top: 0; right: 0; }
@@ -75,7 +75,7 @@
       width: 100%; 
       height: 100%;
       background: rgba(0, 0, 0, 0.8);
-      display: none; /* hidden by default */
+      display: none; /* Hidden by default */
       align-items: center;
       justify-content: center;
       z-index: 10000;
@@ -121,7 +121,7 @@
         }
       </script>
     </div>
-    <!-- Reset Button -->
+    <!-- Reset Button to Restart the Stamp Rally -->
     <button id="resetButton" class="button">Reset Stamp Rally</button>
     <div id="completionMessage">
       Congratulations! You have collected all stamps!
@@ -134,7 +134,7 @@
   <div id="bottom-left" class="corner"></div>
   <div id="bottom-right" class="corner"></div>
   
-  <!-- Manager Modal Overlay (initially hidden) -->
+  <!-- Manager Modal Overlay -->
   <div id="managerModal">
     <h2>Manager Confirmation</h2>
     <p>Please confirm that the visitor has completed the full stamp rally.</p>
@@ -153,11 +153,11 @@
       request.onsuccess = (event) => {
         db = event.target.result;
         loadStamps();
-        // After DB is ready, check for a stamp value (from detection page)
+        // After the DB is ready, check if a stamp parameter exists in the URL.
         const stampValue = getURLParameter('stamp');
         if (stampValue) {
           updateStamp(parseInt(stampValue));
-          // Clean up URL parameters
+          // Remove the parameter from the URL
           window.history.replaceState({}, document.title, "stamp.html");
         }
       };
@@ -200,6 +200,7 @@
         if (!stampData.filled) {  // only update if not already filled
           stampData.filled = true;
           store.put(stampData);
+          console.log("Stamp", stampId, "updated. Showing splash...");
           showSplash(stampId);
         }
       };
@@ -219,9 +220,8 @@
       splashOverlay.style.justifyContent = 'center';
       splashOverlay.style.zIndex = '9999';
       
-      const splashImg = document.createElement('img');
       const idStr = stampId < 10 ? '0' + stampId : stampId;
-      // Assumes splash images are named "splash_01.png", "splash_02.png", etc.
+      const splashImg = document.createElement('img');
       splashImg.src = 'img/splash_' + idStr + '.png';
       splashImg.alt = 'Splash for stamp ' + stampId;
       splashImg.style.maxWidth = '80%';
@@ -230,6 +230,7 @@
       splashOverlay.appendChild(splashImg);
       document.body.appendChild(splashOverlay);
       
+      // Remove the splash overlay after 2 seconds and update the stamp image.
       setTimeout(() => {
         document.body.removeChild(splashOverlay);
         const stampImg = document.getElementById('stamp-img-' + stampId);
@@ -254,7 +255,7 @@
       };
     }
     
-    // ===== Helper for URL Parameters =====
+    // ===== Helper Function for URL Parameters =====
     function getURLParameter(name) {
       const params = new URLSearchParams(window.location.search);
       return params.get(name);
@@ -272,7 +273,6 @@
         clickSequence.push(cornerId);
         if (clickSequence.length === 4) {
           if (clickSequence.join('-') === cornerOrder.join('-')) {
-            // Reset click sequence and show the manager overlay (modal)
             clickSequence = [];
             showManagerModal();
           } else {
@@ -286,13 +286,32 @@
       document.getElementById('managerModal').style.display = 'flex';
     }
     
-    // ===== Manager Confirmation =====
+    // ===== Manager Confirmation Button =====
     document.getElementById('confirmButton').addEventListener('click', () => {
-      // When the manager confirms, set a flag (if needed) and update the background.
       localStorage.setItem('managerConfirmed', 'true');
+      // Change the background image after confirmation.
       document.body.style.backgroundImage = "url('img/confirmed_background.png')";
       // Hide the manager overlay.
       document.getElementById('managerModal').style.display = 'none';
     });
     
-    //
+    // ===== Reset Stamp Rally Button =====
+    document.getElementById('resetButton').addEventListener('click', () => {
+      localStorage.removeItem('managerConfirmed');
+      const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
+      deleteRequest.onsuccess = function() {
+        console.log("Database deleted successfully");
+        location.reload();
+      };
+      deleteRequest.onerror = function(event) {
+        console.error("Error deleting database", event);
+        location.reload();
+      };
+      deleteRequest.onblocked = function() {
+        console.warn("Database deletion blocked");
+        location.reload();
+      };
+    });
+  </script>
+</body>
+</html>
