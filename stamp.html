@@ -54,19 +54,6 @@
       color: #4caf50;
       display: none;
     }
-    /* Invisible corner divs – now 20px x 20px */
-    .corner {
-      position: fixed;
-      width: 20px;
-      height: 20px;
-      z-index: 999;
-      /* Uncomment the following to help debug corner positions */
-      /* background: rgba(255, 0, 0, 0.3); */
-    }
-    #top-left { top: 0; left: 0; }
-    #top-right { top: 0; right: 0; }
-    #bottom-left { bottom: 0; left: 0; }
-    #bottom-right { bottom: 0; right: 0; }
     /* Manager Modal Overlay Styles */
     #managerModal {
       position: fixed;
@@ -128,12 +115,6 @@
     </div>
   </div>
   
-  <!-- Invisible corner divs for triggering manager mode -->
-  <div id="top-left" class="corner"></div>
-  <div id="top-right" class="corner"></div>
-  <div id="bottom-left" class="corner"></div>
-  <div id="bottom-right" class="corner"></div>
-  
   <!-- Manager Modal Overlay -->
   <div id="managerModal">
     <h2>Manager Confirmation</h2>
@@ -156,8 +137,14 @@
         // After the DB is ready, check if a stamp parameter exists in the URL.
         const stampValue = getURLParameter('stamp');
         if (stampValue) {
-          updateStamp(parseInt(stampValue));
-          // Remove the parameter from the URL
+          // If QR code 13 was scanned, trigger manager overlay instead.
+          const n = parseInt(stampValue, 10);
+          if (n === 13) {
+            showManagerModal();
+          } else {
+            updateStamp(n);
+          }
+          // Clean up the URL parameters.
           window.history.replaceState({}, document.title, "stamp.html");
         }
       };
@@ -197,7 +184,7 @@
       const request = store.get(stampId);
       request.onsuccess = (event) => {
         const stampData = event.target.result;
-        if (!stampData.filled) {  // only update if not already filled
+        if (!stampData.filled) {  // Only update if not already filled
           stampData.filled = true;
           store.put(stampData);
           console.log("Stamp", stampId, "updated. Showing splash...");
@@ -265,28 +252,12 @@
       initDB();
     });
     
-    // ===== Manager Mode Activation via Four Corners =====
-    const cornerOrder = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
-    let clickSequence = [];
-    cornerOrder.forEach(cornerId => {
-      document.getElementById(cornerId).addEventListener('click', () => {
-        clickSequence.push(cornerId);
-        if (clickSequence.length === 4) {
-          if (clickSequence.join('-') === cornerOrder.join('-')) {
-            clickSequence = [];
-            showManagerModal();
-          } else {
-            clickSequence = [];
-          }
-        }
-      });
-    });
-    
+    // ===== Manager Modal Overlay Functions =====
     function showManagerModal() {
       document.getElementById('managerModal').style.display = 'flex';
     }
     
-    // ===== Manager Confirmation Button =====
+    // Manager Confirmation Button
     document.getElementById('confirmButton').addEventListener('click', () => {
       localStorage.setItem('managerConfirmed', 'true');
       // Change the background image after confirmation.
