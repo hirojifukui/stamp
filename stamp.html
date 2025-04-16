@@ -112,6 +112,13 @@
       request.onsuccess = event => {
         db = event.target.result;
         loadStamps();
+        // Now that the DB is ready, check for a stamp value in the URL.
+        const stampValue = getURLParameter('stamp');
+        if (stampValue) {
+          updateStamp(parseInt(stampValue));
+          // Clean up the URL to remove the stamp parameter.
+          window.history.replaceState({}, document.title, "stamp.html");
+        }
       };
       request.onupgradeneeded = event => {
         db = event.target.result;
@@ -149,6 +156,7 @@
       const request = store.get(stampId);
       request.onsuccess = event => {
         const stampData = event.target.result;
+        // Only update if not already filled.
         if (!stampData.filled) {
           stampData.filled = true;
           store.put(stampData);
@@ -175,7 +183,7 @@
       // Create an image element for the splash.
       const splashImg = document.createElement('img');
       const idStr = stampId < 10 ? '0' + stampId : stampId;
-      // Assuming you have splash images named "splash_01.png", "splash_02.png", etc.
+      // Assumes splash images are named "splash_01.png", "splash_02.png", etc.
       splashImg.src = 'img/splash_' + idStr + '.png';
       splashImg.alt = 'Splash for stamp ' + stampId;
       splashImg.style.maxWidth = '80%';
@@ -184,7 +192,7 @@
       splashOverlay.appendChild(splashImg);
       document.body.appendChild(splashOverlay);
       
-      // Remove splash after 2 seconds then update the stamp to display its image.
+      // Remove the splash after 2 seconds then update the stamp image.
       setTimeout(() => {
         document.body.removeChild(splashOverlay);
         const stampImg = document.getElementById('stamp-img-' + stampId);
@@ -217,15 +225,8 @@
     
     window.addEventListener('load', () => {
       initDB();
-      // Check if a stamp value was passed from detection.html.
-      const stampValue = getURLParameter('stamp');
-      if (stampValue) {
-        updateStamp(parseInt(stampValue));
-        // Remove the stamp parameter from the URL.
-        window.history.replaceState({}, document.title, "stamp.html");
-      }
     });
-     
+    
     // ===== Manager Mode Activation =====
     const cornerOrder = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
     let clickSequence = [];

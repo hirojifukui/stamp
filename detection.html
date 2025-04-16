@@ -63,10 +63,10 @@
     
     function submitQR() {
       const value = document.getElementById('qrInput').value.trim();
-      // Basic check: value should be an integer between 1 and 12 (allows leading zero).
+      // Basic check: value should be an integer between 1 and 12.
       const num = parseInt(value, 10);
       if (!isNaN(num) && num >= 1 && num <= 12) {
-        // Redirect back to stamp page with the stamp value
+        // Redirect back to stamp page with the stamp value.
         window.location.href = 'stamp.html?stamp=' + num;
       } else {
         alert('Please enter a valid QR code value between 01 and 12.');
@@ -76,15 +76,14 @@
     function geoSuccess(position) {
       const userLat = position.coords.latitude;
       const userLng = position.coords.longitude;
-
-    // Print the latitude and longitude for debugging purposes.
+      
+      // Print the latitude and longitude for debugging purposes.
       document.getElementById('gpsStatus').innerHTML = 
           'Detected Coordinates:<br>Latitude: ' + userLat + '<br>Longitude: ' + userLng + '<br><br>';
       
-
       let found = false;
       let foundId = null;
-      // Loop through each predefined location to see if within allowed range
+      // Check each predefined location.
       for (const loc of locations) {
         if (Math.abs(userLat - loc.lat) <= loc.allowance &&
             Math.abs(userLng - loc.lng) <= loc.allowance) {
@@ -94,13 +93,13 @@
         }
       }
       if (found) {
-        document.getElementById('gpsStatus').innerText = 'Detected location for stamp ' + foundId + '!';
-        // Delay a moment to show success then return to stamp page
+        document.getElementById('gpsStatus').innerHTML += 'Detected location for stamp ' + foundId + '!';
+        // Wait a moment to show the result, then redirect.
         setTimeout(() => {
           window.location.href = 'stamp.html?stamp=' + foundId;
         }, 1500);
       } else {
-        document.getElementById('gpsStatus').innerHTML = '<span class="error">Your location is not within any designated area.<br>Detected Coordinates:<br>Latitude: ' + userLat + '<br>Longitude: ' + userLng + '<br><br></span>';
+        document.getElementById('gpsStatus').innerHTML += '<span class="error">Your location is not within any designated area.</span>';
       }
     }
     
