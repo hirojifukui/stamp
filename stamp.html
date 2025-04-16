@@ -41,6 +41,7 @@
       padding: 10px 20px;
       margin-top: 20px;
       font-size: 1em;
+      cursor: pointer;
     }
     .explanation-links a {
       margin: 5px;
@@ -59,6 +60,8 @@
       width: 50px;
       height: 50px;
       z-index: 999;
+      /* Optionally, add background to debug clicks (remove later) */
+      /* background: rgba(255, 0, 0, 0.2); */
     }
     #top-left { top: 0; left: 0; }
     #top-right { top: 0; right: 0; }
@@ -67,8 +70,10 @@
     /* Manager Modal Overlay Styles */
     #managerModal {
       position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      top: 0; 
+      left: 0;
+      width: 100%; 
+      height: 100%;
       background: rgba(0, 0, 0, 0.8);
       display: none; /* hidden by default */
       align-items: center;
@@ -82,6 +87,7 @@
       padding: 10px 20px;
       margin-top: 20px;
       font-size: 1em;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -115,6 +121,8 @@
         }
       </script>
     </div>
+    <!-- Reset Button -->
+    <button id="resetButton" class="button">Reset Stamp Rally</button>
     <div id="completionMessage">
       Congratulations! You have collected all stamps!
     </div>
@@ -145,7 +153,7 @@
       request.onsuccess = (event) => {
         db = event.target.result;
         loadStamps();
-        // After DB is ready, check for stamp value (from detection page)
+        // After DB is ready, check for a stamp value (from detection page)
         const stampValue = getURLParameter('stamp');
         if (stampValue) {
           updateStamp(parseInt(stampValue));
@@ -264,16 +272,17 @@
         clickSequence.push(cornerId);
         if (clickSequence.length === 4) {
           if (clickSequence.join('-') === cornerOrder.join('-')) {
-            // Show the manager modal instead of redirecting away.
+            // Reset click sequence and show the manager overlay (modal)
+            clickSequence = [];
             showManagerModal();
+          } else {
+            clickSequence = [];
           }
-          clickSequence = [];
         }
       });
     });
     
     function showManagerModal() {
-      // Display the manager overlay until confirmation.
       document.getElementById('managerModal').style.display = 'flex';
     }
     
@@ -281,11 +290,9 @@
     document.getElementById('confirmButton').addEventListener('click', () => {
       // When the manager confirms, set a flag (if needed) and update the background.
       localStorage.setItem('managerConfirmed', 'true');
-      // Set a new background image after confirmation.
       document.body.style.backgroundImage = "url('img/confirmed_background.png')";
-      // Hide the manager modal.
+      // Hide the manager overlay.
       document.getElementById('managerModal').style.display = 'none';
     });
-  </script>
-</body>
-</html>
+    
+    //
