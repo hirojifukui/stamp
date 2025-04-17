@@ -5,13 +5,13 @@
   <title>Stamp Rally - Detection</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; }
-    #video { width: 100%; max-width: 400px; border: 1px solid #ccc; }
+    #video { width: 100%; max-width: 400px; border: 1px solid #ccc; background: #000; }
     #gpsStatus, #qrStatus { margin-top: 20px; }
     .button { padding: 10px 20px; margin: 10px; font-size: 1em; cursor: pointer; }
     .error { color: red; margin-top: 20px; }
   </style>
-  <!-- jsQR library from CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <!-- jsQR library -->
+  <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
 <body>
   <h1>Location Detection</h1>
@@ -20,20 +20,16 @@
 
   <script>
     const locations = [
-      {id: 1, lat: 35.0001, lng: 139.0001, allowance: 0.001},
-      /* ... up to id:12 ... */
-      {id: 12, lat: 35.0012, lng: 139.0012, allowance: 0.001}
+      {id:1, lat:35.0001, lng:139.0001, allowance:0.001},
+      /* …ids 2–11… */
+      {id:12, lat:35.0012, lng:139.0012, allowance:0.001}
     ];
 
     function getURLParameter(name) {
       return new URLSearchParams(window.location.search).get(name);
     }
-
     function cancel() {
-      // stop any camera if running
-      if (window.currentStream) {
-        window.currentStream.getTracks().forEach(t => t.stop());
-      }
+      if (window.currentStream) window.currentStream.getTracks().forEach(t=>t.stop());
       window.location.href = 'stamp.html';
     }
 
@@ -48,36 +44,45 @@
       content.textContent = 'Error: Unknown detection method.';
     }
 
-    // --- QR code scanning ---
+    // --- QR Code Scanning ---
     function startQRScan() {
-      content.innerHTML = '<p>Point your camera at the QR code.</p><video id="video" autoplay></video><div id="qrStatus"></div>';
+      content.innerHTML = `
+        <p>Point your camera at the QR code.</p>
+        <video id="video" autoplay muted playsinline></video>
+        <div id="qrStatus"></div>
+      `;
       const video = document.getElementById('video');
       const qrStatus = document.getElementById('qrStatus');
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        .then(stream => {
-          window.currentStream = stream;
-          video.srcObject = stream;
-          video.play();
-          requestAnimationFrame(tick);
-        })
-        .catch(err => qrStatus.innerHTML = `<span class="error">Camera error: ${err.message}</span>`);
+      navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } }
+      })
+      .then(stream => {
+        window.currentStream = stream;
+        video.srcObject = stream;
+        video.play();
+        requestAnimationFrame(tick);
+      })
+      .catch(err => {
+        console.error(err);
+        qrStatus.innerHTML = `<span class="error">Camera error: ${err.message}</span>`;
+      });
 
       function tick() {
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (video.videoWidth) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imgData.data, canvas.width, canvas.height, { inversionAttempts: "dontInvert" });
           if (code) {
             const val = code.data.trim();
             const n = parseInt(val, 10);
-            if (!isNaN(n) && (1 <= n && n <= 13)) {
+            if (!isNaN(n) && n >= 1 && n <= 13) {
               qrStatus.textContent = `Detected QR: ${val}`;
-              stopStreamAndRedirect(n);
+              stopAndRedirect(n);
               return;
             } else {
               qrStatus.innerHTML = `<span class="error">Unrecognized code: ${val}</span>`;
@@ -88,16 +93,14 @@
       }
     }
 
-    function stopStreamAndRedirect(n) {
-      if (window.currentStream) {
-        window.currentStream.getTracks().forEach(t => t.stop());
-      }
+    function stopAndRedirect(n) {
+      if (window.currentStream) window.currentStream.getTracks().forEach(t=>t.stop());
       setTimeout(() => {
         window.location.href = `stamp.html?stamp=${n}`;
       }, 500);
     }
 
-    // --- GPS detection ---
+    // --- GPS Detection ---
     function startGPS() {
       content.innerHTML = '<p>Detecting your location…</p><div id="gpsStatus"></div>';
       const gpsStatus = document.getElementById('gpsStatus');
@@ -106,12 +109,14 @@
         return;
       }
       navigator.geolocation.getCurrentPosition(pos => {
-        const { latitude: userLat, longitude: userLng } = pos.coords;
+        const {latitude: userLat, longitude: userLng} = pos.coords;
         gpsStatus.innerHTML = `Latitude: ${userLat.toFixed(6)}<br>Longitude: ${userLng.toFixed(6)}<br><br>`;
         let found = false, id;
         for (const loc of locations) {
-          if (Math.abs(userLat - loc.lat) <= loc.allowance && Math.abs(userLng - loc.lng) <= loc.allowance) {
-            found = true; id = loc.id; break;
+          if (Math.abs(userLat - loc.lat) <= loc.allowance &&
+              Math.abs(userLng - loc.lng) <= loc.allowance) {
+            found = true; id = loc.id;
+            break;
           }
         }
         if (found) {
