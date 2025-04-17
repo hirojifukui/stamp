@@ -5,106 +5,124 @@
   <title>Stamp Rally - Detection</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; }
-    .button { padding: 10px 20px; margin: 10px; font-size: 1em; }
-    #cameraView, #gpsStatus { margin-top: 20px; }
-    input { padding: 10px; font-size: 1em; }
+    #video { width: 100%; max-width: 400px; border: 1px solid #ccc; }
+    #gpsStatus, #qrStatus { margin-top: 20px; }
+    .button { padding: 10px 20px; margin: 10px; font-size: 1em; cursor: pointer; }
     .error { color: red; margin-top: 20px; }
   </style>
+  <!-- jsQR library from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
   <h1>Location Detection</h1>
   <div id="detectionContent"></div>
-  <!-- Cancel button to return to stamp page -->
-  <button class="button" onclick="window.location.href='stamp.html'">Cancel</button>
-  
+  <button class="button" onclick="cancel()">Cancel</button>
+
   <script>
-    // Predefined GPS locations for 12 stamps (dummy values)
     const locations = [
-      {id: 1, lat: 37.3584767, lng: -122.04965, allowance: 0.02},
-      {id: 2, lat: 35.0002, lng: 139.0002, allowance: 0.001},
-      {id: 3, lat: 35.0003, lng: 139.0003, allowance: 0.001},
-      {id: 4, lat: 35.0004, lng: 139.0004, allowance: 0.001},
-      {id: 5, lat: 35.0005, lng: 139.0005, allowance: 0.001},
-      {id: 6, lat: 35.0006, lng: 139.0006, allowance: 0.001},
-      {id: 7, lat: 35.0007, lng: 139.0007, allowance: 0.001},
-      {id: 8, lat: 35.0008, lng: 139.0008, allowance: 0.001},
-      {id: 9, lat: 35.0009, lng: 139.0009, allowance: 0.001},
-      {id: 10, lat: 35.0010, lng: 139.0010, allowance: 0.001},
-      {id: 11, lat: 35.0011, lng: 139.0011, allowance: 0.001},
+      {id: 1, lat: 35.0001, lng: 139.0001, allowance: 0.001},
+      /* ... up to id:12 ... */
       {id: 12, lat: 35.0012, lng: 139.0012, allowance: 0.001}
     ];
-    
-    // Determine detection method from URL parameter
+
     function getURLParameter(name) {
-      const params = new URLSearchParams(window.location.search);
-      return params.get(name);
+      return new URLSearchParams(window.location.search).get(name);
     }
-    
+
+    function cancel() {
+      // stop any camera if running
+      if (window.currentStream) {
+        window.currentStream.getTracks().forEach(t => t.stop());
+      }
+      window.location.href = 'stamp.html';
+    }
+
     const method = getURLParameter('method');
-    const contentDiv = document.getElementById('detectionContent');
-    
+    const content = document.getElementById('detectionContent');
+
     if (method === 'qr') {
-      // --- Simulated QR Code Detection ---
-      contentDiv.innerHTML = '<p>Camera is active (simulated).<br/>Please enter a QR code value (01 to 12):</p>' +
-                             '<input type="text" id="qrInput" maxlength="2" />' +
-                             '<br/><button class="button" onclick="submitQR()">Submit</button>';
+      startQRScan();
     } else if (method === 'gps') {
-      // --- GPS Location Detection ---
-      contentDiv.innerHTML = '<p>Detecting your location...</p>' +
-                             '<div id="gpsStatus"></div>';
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(geoSuccess, geoError);
-      } else {
-        document.getElementById('gpsStatus').innerText = 'Geolocation is not supported by your browser.';
-      }
+      startGPS();
     } else {
-      contentDiv.innerHTML = '<p>Error: Unknown detection method.</p>';
+      content.textContent = 'Error: Unknown detection method.';
     }
-    
-    function submitQR() {
-      const value = document.getElementById('qrInput').value.trim();
-      // Basic check: value should be an integer between 1 and 12.
-      const num = parseInt(value, 10);
-      if (!isNaN(num) && num >= 1 && num <= 13) {
-        // Redirect back to stamp page with the stamp value.
-        window.location.href = 'stamp.html?stamp=' + num;
-      } else {
-        alert('Please enter a valid QR code value between 01 and 12.');
-      }
-    }
-    
-    function geoSuccess(position) {
-      const userLat = position.coords.latitude;
-      const userLng = position.coords.longitude;
-      
-      // Print the latitude and longitude for debugging purposes.
-      document.getElementById('gpsStatus').innerHTML = 
-          'Detected Coordinates:<br>Latitude: ' + userLat + '<br>Longitude: ' + userLng + '<br><br>';
-      
-      let found = false;
-      let foundId = null;
-      // Check each predefined location.
-      for (const loc of locations) {
-        if (Math.abs(userLat - loc.lat) <= loc.allowance &&
-            Math.abs(userLng - loc.lng) <= loc.allowance) {
-          found = true;
-          foundId = loc.id;
-          break;
+
+    // --- QR code scanning ---
+    function startQRScan() {
+      content.innerHTML = '<p>Point your camera at the QR code.</p><video id="video" autoplay></video><div id="qrStatus"></div>';
+      const video = document.getElementById('video');
+      const qrStatus = document.getElementById('qrStatus');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(stream => {
+          window.currentStream = stream;
+          video.srcObject = stream;
+          video.play();
+          requestAnimationFrame(tick);
+        })
+        .catch(err => qrStatus.innerHTML = `<span class="error">Camera error: ${err.message}</span>`);
+
+      function tick() {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+          if (code) {
+            const val = code.data.trim();
+            const n = parseInt(val, 10);
+            if (!isNaN(n) && (1 <= n && n <= 13)) {
+              qrStatus.textContent = `Detected QR: ${val}`;
+              stopStreamAndRedirect(n);
+              return;
+            } else {
+              qrStatus.innerHTML = `<span class="error">Unrecognized code: ${val}</span>`;
+            }
+          }
         }
-      }
-      if (found) {
-        document.getElementById('gpsStatus').innerHTML += 'Detected location for stamp ' + foundId + '!';
-        // Wait a moment to show the result, then redirect.
-        setTimeout(() => {
-          window.location.href = 'stamp.html?stamp=' + foundId;
-        }, 1500);
-      } else {
-        document.getElementById('gpsStatus').innerHTML += '<span class="error">Your location is not within any designated area.</span>';
+        requestAnimationFrame(tick);
       }
     }
-    
-    function geoError(error) {
-      document.getElementById('gpsStatus').innerHTML = '<span class="error">Error in geolocation: ' + error.message + '</span>';
+
+    function stopStreamAndRedirect(n) {
+      if (window.currentStream) {
+        window.currentStream.getTracks().forEach(t => t.stop());
+      }
+      setTimeout(() => {
+        window.location.href = `stamp.html?stamp=${n}`;
+      }, 500);
+    }
+
+    // --- GPS detection ---
+    function startGPS() {
+      content.innerHTML = '<p>Detecting your location…</p><div id="gpsStatus"></div>';
+      const gpsStatus = document.getElementById('gpsStatus');
+      if (!navigator.geolocation) {
+        gpsStatus.textContent = 'Geolocation not supported.';
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude: userLat, longitude: userLng } = pos.coords;
+        gpsStatus.innerHTML = `Latitude: ${userLat.toFixed(6)}<br>Longitude: ${userLng.toFixed(6)}<br><br>`;
+        let found = false, id;
+        for (const loc of locations) {
+          if (Math.abs(userLat - loc.lat) <= loc.allowance && Math.abs(userLng - loc.lng) <= loc.allowance) {
+            found = true; id = loc.id; break;
+          }
+        }
+        if (found) {
+          gpsStatus.innerHTML += `Detected stamp ${id}! Redirecting…`;
+          setTimeout(() => window.location.href = `stamp.html?stamp=${id}`, 1000);
+        } else {
+          gpsStatus.innerHTML += `<span class="error">Out of designated areas.</span>`;
+        }
+      }, err => {
+        gpsStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`;
+      });
     }
   </script>
 </body>
